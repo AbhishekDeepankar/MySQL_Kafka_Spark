@@ -2,6 +2,7 @@ from sqlalchemy import create_engine
 import sqlalchemy
 import urllib.parse
 
+
 def get_mysql_engine(
         user: str,
         passwd: str,

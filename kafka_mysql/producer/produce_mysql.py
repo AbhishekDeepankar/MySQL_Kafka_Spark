@@ -1,20 +1,21 @@
 import pandas as pd
-from sqlalchemy import create_engine
 from kafka_mysql.helper_functions.generate_mysql_engine import get_mysql_engine
 import datetime
 import kafka
 import json
 import kafka_mysql.Config.credentials as c
+import kafka_mysql.Config.constants as cn
 
-def kfka_producer(
+
+def kafka_producer(
         kafka_topic: str,
         database: str,
         broker: list[str],
         mysql_host: str,
-        table: str
+        table: str,
+        bookmark_tbl: str
 ) -> str:
 
-    bookmark_df = pd.DataFrame()
     current_timestamp = datetime.datetime.today().strftime("%Y-%m-%d %H:%M:%S")
     producer = kafka.KafkaProducer(
         bootstrap_servers=broker,
@@ -25,7 +26,7 @@ def kfka_producer(
 
     max_date_df = pd.read_sql('select max(updated_on) as max_date FROM ' + table, con=engine)
 
-    bookmark_df = pd.read_sql("select max(updated_on) as max_date from BOOKMARK", con=engine)
+    bookmark_df = pd.read_sql('select max(updated_on) as max_date from ' + bookmark_tbl, con=engine)
 
     if bookmark_df.empty:
         df = pd.read_sql('SELECT country_name, date, parameter, product, value,'
@@ -47,6 +48,7 @@ def kfka_producer(
             data = [[current_timestamp, max_date, table]]
             bookmark_df = pd.DataFrame(data, columns=['RUN_TIME', 'UPDATED_ON', 'TABLE_NAME'])
             bookmark_df.to_sql('BOOKMARK', con=engine, if_exists='append', index=False)
+            producer.flush()
 
     else:
         print(1)
@@ -75,19 +77,17 @@ def kfka_producer(
 
             data = [[current_timestamp, max_df_date, table]]
             bookmark_df = pd.DataFrame(data, columns=['RUN_TIME', 'UPDATED_ON', 'TABLE_NAME'])
-            bookmark_df.to_sql('BOOKMARK', con=engine, if_exists='append', index=False)
-
-        print(max_df_date)
-        exit(0)
-
-    producer.flush()
-
-    # fmt = '%Y-%m-%d %H:%M:%S'
-    # max_date = df['max_date'].dt.strftime(fmt).values[0]
-
+            bookmark_df.to_sql(bookmark_tbl, con=engine, if_exists='append', index=False)
+            producer.flush()
 
     engine.dispose()
     return '0'
 
+
 if __name__ == "__main__":
-    kfka_producer("pipeline_mysql", "pipeline_pool", ['192.168.20.10:9092'], '192.168.20.10', "ELECTRICITY_PRODUCTION")
+    kafka_producer(cn.pipeln_topic,
+                   cn.pipeln_db,
+                   cn.pipeln_broker,
+                   cn.pipeln_db_host,
+                   cn.pipeln_table1,
+                   cn.pipeln_broker)
