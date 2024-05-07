@@ -1,7 +1,0 @@
-1. create user
-2. create database
-3. create table
-4. change bind-address to 0.0.0.0
-5. change user ip to '%' for remote host login
-6. grant access to user
-7. host: virtual box host

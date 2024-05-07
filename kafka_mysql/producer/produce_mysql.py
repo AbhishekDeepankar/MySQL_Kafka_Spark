@@ -25,25 +25,30 @@ def kafka_producer(
     engine = get_mysql_engine(c.mysql_user1, c.mysql_user_password1, host=mysql_host, database=database)
 
     max_date_df = pd.read_sql('select max(updated_on) as max_date FROM ' + table, con=engine)
-
+    bookmark_data_df = pd.read_sql('select ID from ' + bookmark_tbl, con=engine)
     bookmark_df = pd.read_sql('select max(updated_on) as max_date from ' + bookmark_tbl, con=engine)
 
-    if bookmark_df.empty:
+    if bookmark_data_df.empty:
         df = pd.read_sql('SELECT country_name, date, parameter, product, value,'
                          'unit, created_on, updated_on, ID FROM ' + table, con=engine)
         if not df.empty:
             for row in df.itertuples():
-                producer.send(topic=kafka_topic, value={
+                j_object = {
                     'country_name': row[1],
                     'date': row[2],
-                    'parameter': row[0],
-                    'product': row[0],
-                    'value': row[0],
-                    'unit': row[0],
-                    'created_on': row[0],
-                    'updated_on': row[0],
-                    'ID': row[0]
-                })
+                    'parameter': row[3],
+                    'product': row[4],
+                    'value': row[5],
+                    'unit': row[6],
+                    'created_on': row[7],
+                    'updated_on': row[8],
+                    'ID': row[9]
+                }
+
+                j_object['created_on'] = j_object['created_on'].strftime('%Y-%m-%d %H:%M:%S')
+                j_object['updated_on'] = j_object['updated_on'].strftime('%Y-%m-%d %H:%M:%S')
+
+                producer.send(topic=kafka_topic, value=j_object)
             max_date = max_date_df['max_date'].dt.strftime('%Y-%m-%d %H:%M:%S').values[0]
             data = [[current_timestamp, max_date, table]]
             bookmark_df = pd.DataFrame(data, columns=['RUN_TIME', 'UPDATED_ON', 'TABLE_NAME'])
@@ -51,7 +56,6 @@ def kafka_producer(
             producer.flush()
 
     else:
-        print(1)
         max_date = bookmark_df['max_date'].dt.strftime('%Y-%m-%d %H:%M:%S').values[0]
         df = pd.read_sql("SELECT country_name, date, parameter, product, value,"
                          "unit, created_on, updated_on, ID FROM " + table +
@@ -59,22 +63,26 @@ def kafka_producer(
 
         max_date_df = pd.read_sql("SELECT max(updated_on) as max_df_date FROM " + table +
                                   " where updated_on > %s", con=engine, params=(max_date,))
-        max_df_date = max_date_df['max_df_date'].dt.strftime('%Y-%m-%d %H:%M:%S').values[0]
 
         if not df.empty:
             for row in df.itertuples():
-                producer.send(topic=kafka_topic, value={
+                j_object = {
                     'country_name': row[1],
                     'date': row[2],
-                    'parameter': row[0],
-                    'product': row[0],
-                    'value': row[0],
-                    'unit': row[0],
-                    'created_on': row[0],
-                    'updated_on': row[0],
-                    'ID': row[0]
-                })
+                    'parameter': row[3],
+                    'product': row[4],
+                    'value': row[5],
+                    'unit': row[6],
+                    'created_on': row[7],
+                    'updated_on': row[8],
+                    'ID': row[9]
+                }
 
+                j_object['created_on'] = j_object['created_on'].strftime('%Y-%m-%d %H:%M:%S')
+                j_object['updated_on'] = j_object['updated_on'].strftime('%Y-%m-%d %H:%M:%S')
+
+                producer.send(topic=kafka_topic, value=j_object)
+            max_df_date = max_date_df['max_df_date'].dt.strftime('%Y-%m-%d %H:%M:%S').values[0]
             data = [[current_timestamp, max_df_date, table]]
             bookmark_df = pd.DataFrame(data, columns=['RUN_TIME', 'UPDATED_ON', 'TABLE_NAME'])
             bookmark_df.to_sql(bookmark_tbl, con=engine, if_exists='append', index=False)
@@ -85,9 +93,16 @@ def kafka_producer(
 
 
 if __name__ == "__main__":
-    kafka_producer(cn.pipeln_topic,
-                   cn.pipeln_db,
-                   cn.pipeln_broker,
-                   cn.pipeln_db_host,
-                   cn.pipeln_table1,
-                   cn.pipeln_broker)
+
+    while True:
+        try:
+            kafka_producer(
+                kafka_topic=cn.pipeln_topic,
+                database=cn.pipeln_db,
+                broker=cn.pipeln_broker,
+                mysql_host=cn.pipeln_db_host,
+                table=cn.pipeln_table1,
+                bookmark_tbl=cn.pipeln_bookmark_tbl
+            )
+        except Exception as err:
+            print('Something unexpected -> ', err)
