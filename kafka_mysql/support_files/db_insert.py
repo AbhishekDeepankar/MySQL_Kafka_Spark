@@ -13,6 +13,7 @@ if __name__ == "__main__":
     df['created_on'] = current_timestamp
     df['updated_on'] = current_timestamp
     df.to_sql('ELECTRICITY_PRODUCTION', con=engine, if_exists='append', index=False)
+    # df = df.head(1)
     print(df)
     engine.dispose()
     

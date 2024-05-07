@@ -18,6 +18,7 @@ def spark_sub(
     hosts = ",".join(host)
     topics = ",".join(topic)
 
+    # creating schema for the data
     my_schema = StructType([
         StructField("country_name", StringType()),
         StructField("date", StringType()),
@@ -29,6 +30,7 @@ def spark_sub(
         StructField("updated_on", TimestampType()),
     ])
 
+    # readstream for the kafka topic
     df = (
         spark.readStream.format("kafka")
         .option("kafka.bootstrap.servers", hosts)
@@ -37,10 +39,12 @@ def spark_sub(
         .load()
     )
 
+    # converting the consumed data to a dataframe with the defined schema
     value_df = (
         df.select(fx.from_json(fx.col("value").cast("string"), my_schema).alias("value"))
     )
 
+    # Data transformation
     data_df = value_df.select(
         "value.*",
         fx.when(
@@ -51,18 +55,33 @@ def spark_sub(
             | ((fx.col("value.product").ilike('%Renewable%'))
                 & (~fx.col("value.product").ilike('%Non%'))),
             fx.lit("Renewable Energy")
-        ).otherwise(fx.lit("Non-Renewable Energy")).alias("Classification")
+        ).otherwise(fx.lit("Non-Renewable Energy")).alias("classification")
     )
+
+    # creating write stream
+
+    # writing to console
+    # query = (
+    #     data_df.selectExpr("*")
+    #     .writeStream.format("console")
+    #     .option("truncate", False)
+    #     .start()
+    # )
 
     query = (
         data_df.selectExpr("*")
-        .writeStream.format("console")
-        .option("truncate", False)
+        .writeStream
+        .format("parquet")
+        .outputMode("append")
+        .option("path", "D:\\temp")
+        .partitionBy("classification")
+        .option("checkpointLocation", "D:\\checkpoint")
         .start()
     )
 
     query.awaitTermination()
 
+    # Could be modified
     return '0'
 
 
@@ -76,6 +95,6 @@ if __name__ == "__main__":
     spark_sub(
         spark=sparkSession,
         host=c.pipeln_broker,
-        topic=c.pipeln_topic,
+        topic=[c.pipeln_topic],
         offset='earliest'
     )

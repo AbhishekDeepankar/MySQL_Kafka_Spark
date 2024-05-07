@@ -16,19 +16,25 @@ def kafka_producer(
         bookmark_tbl: str
 ) -> str:
 
+    # creating a timestamp for the bookmark
     current_timestamp = datetime.datetime.today().strftime("%Y-%m-%d %H:%M:%S")
+
+    # creating kafka producer with json serialization
     producer = kafka.KafkaProducer(
         bootstrap_servers=broker,
         value_serializer=lambda v: json.dumps(v).encode('utf-8')
     )
 
+    # mysql engine for database I/O ops
     engine = get_mysql_engine(c.mysql_user1, c.mysql_user_password1, host=mysql_host, database=database)
 
+    # Checking if there are any new records to be published to the topic
     max_date_df = pd.read_sql('select max(updated_on) as max_date FROM ' + table, con=engine)
     bookmark_data_df = pd.read_sql('select ID from ' + bookmark_tbl, con=engine)
     bookmark_df = pd.read_sql('select max(updated_on) as max_date from ' + bookmark_tbl, con=engine)
 
     if bookmark_data_df.empty:
+        # reading records from the mysql database
         df = pd.read_sql('SELECT country_name, date, parameter, product, value,'
                          'unit, created_on, updated_on, ID FROM ' + table, con=engine)
         if not df.empty:
@@ -45,10 +51,13 @@ def kafka_producer(
                     'ID': row[9]
                 }
 
+                # casting timestamp to string for JSON serialization
                 j_object['created_on'] = j_object['created_on'].strftime('%Y-%m-%d %H:%M:%S')
                 j_object['updated_on'] = j_object['updated_on'].strftime('%Y-%m-%d %H:%M:%S')
 
                 producer.send(topic=kafka_topic, value=j_object)
+
+            # updating bookmark table with the latest timestamp
             max_date = max_date_df['max_date'].dt.strftime('%Y-%m-%d %H:%M:%S').values[0]
             data = [[current_timestamp, max_date, table]]
             bookmark_df = pd.DataFrame(data, columns=['RUN_TIME', 'UPDATED_ON', 'TABLE_NAME'])
