@@ -1,4 +1,4 @@
-pipeln_topic = ''        # Kafka topic
+pipeln_topic = []        # Kafka topic list
 pipeln_db = ''           # MySQL database
 pipeln_broker = []       # Kafka broker list
 pipeln_db_host = ''      # Mysql database host
